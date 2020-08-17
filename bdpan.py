@@ -1,10 +1,11 @@
 import os
 from DecryptLogin.login import Login
-import requests
-from DecryptLogin.utils.cookies import loadSessionCookies, saveSessionCookies
 from config import config
 import logging
 from requests.exceptions import HTTPError
+from itertools import count
+import pickle
+import shutil
 
 
 def log_error(func):
@@ -24,11 +25,25 @@ def log_error(func):
 
 
 class BdPan:
-    BASE_URL = 'https://pcs.baidu.com/rest/2.0/pcs/'
+    URL = {'PCS': 'https://pcs.baidu.com/rest/2.0/pcs/', 'XPAN': 'https://pan.baidu.com/rest/2.0/xpan/'}
+    LIST_LIMIT = 5000
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = None
         self._get_logger()
+
+    @staticmethod
+    def load_session():
+        try:
+            with open(config['session'], 'rb') as f:
+                return pickle.load(f)
+        except:
+            pass
+
+    @staticmethod
+    def save_session(session):
+        with open(config['session'], 'wb') as f:
+            pickle.dump(session, f)
 
     @staticmethod
     def sizeof_fmt(num):
@@ -46,19 +61,20 @@ class BdPan:
         ch.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
         self.logger.addHandler(ch)
 
-    def bd_get(self, method, path='file', params={}, **kwargs):
+    def bd_get(self, method, path='file', url='XPAN', params={}, **kwargs):
         params['app_id'] = config['app_id']
         params['method'] = method
-        return self.session.get(BdPan.BASE_URL + path, params=params, **kwargs)
+        return self.session.get(BdPan.URL[url] + path, params=params, **kwargs)
 
     @log_error
     def login(self):
-        infos_return, self.session = loadSessionCookies(session=self.session, cookiespath=config['cookies'])
-        if not infos_return['is_success'] or self.bd_get('info', 'quota').status_code != 200:
+        self.session = self.load_session()
+        if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
             infos_return, self.session = Login().baidupan(config['username'], config['password'], 'pc')
             if infos_return['errInfo']['no'] != '0':
                 raise RuntimeError(infos_return)
-        saveSessionCookies(session=self.session, cookiespath=config['cookies'])
+            self.save_session(self.session)
+        self.session.get('https://pan.baidu.com/')
 
     def download_file(self, path, r_path=''):
         f_name = os.path.split(path)[1]
@@ -69,7 +85,7 @@ class BdPan:
         headers = {}
         if os.path.exists(f_path + '.part'):
             headers['Range'] = 'bytes=%d-' % os.path.getsize(f_path + '.part')
-        with self.bd_get('download', params={'path': path}, headers=headers, stream=True) as r:
+        with self.bd_get('download', url='PCS', params={'path': path}, headers=headers, stream=True) as r:
             if r.status_code >= 400:
                 _ = r.content
                 r.raise_for_status()
@@ -77,16 +93,22 @@ class BdPan:
             with open(f_path + '.part', 'ab') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-        os.rename(f_path + '.part', f_path)
+        shutil.move(f_path + '.part', f_path)
 
     def _list(self, path, known_dir=False):
         if not known_dir:
-            res = self.bd_get('meta', params={'path': path})
+            res = self.bd_get('meta', url='PCS', params={'path': path})
             res.raise_for_status()
+            ret = res.json()['list']
         if known_dir or res.json()['list'][0]['isdir'] == 1:
-            res = self.bd_get('list', params={'path': path})
-            res.raise_for_status()
-        return res.json()['list']
+            ret = []
+            for i in count(step=BdPan.LIST_LIMIT):
+                res = self.bd_get('list', params={'dir': path, 'limit': BdPan.LIST_LIMIT, 'start': i})
+                res.raise_for_status()
+                ret += res.json()['list']
+                if len(res.json()['list']) < BdPan.LIST_LIMIT:
+                    break
+        return ret
 
     @log_error
     def list(self, path):
@@ -107,7 +129,8 @@ def main():
         pan = BdPan()
         pan.login()
         eval('pan.' + config['action'] + "('" + config['path'] + "')")
-    except:
+    except Exception as e:
+        # raise e
         pass
 
 

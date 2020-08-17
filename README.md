@@ -39,25 +39,25 @@ result:
 #### download directory
     python bdpan.py download /test
 #### download to specify path
-    python bdpan.py download /test -l <path>
+    python bdpan.py download /test -p <path>
 ## full usage
-    usage: bdpan.py [-h] [-l LOCAL_PATH] [-c CONF] [-C COOKIES] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o] action path
+    usage: bdpan.py [-h] [-p LOCAL_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o] [-l LOG_FILE] action path
     
      a Python client for Baidu Pan.
     
     positional arguments:
       action                available actions:list, download.
-                            list		list files and directories in the path.
-                            download	download all files and directories in the path.
+                            list            list files and directories in the path.
+                            download        download all files and directories in the path.
       path                  absolute path in Baidu Pan. can be file or directory.
     
     optional arguments:
       -h, --help            show this help message and exit
-      -l LOCAL_PATH, --local-path LOCAL_PATH
+      -p LOCAL_PATH, --local-path LOCAL_PATH
                             specify where the download files will be store.
       -c CONF, --conf CONF  the path of config file.
-      -C COOKIES, --cookies COOKIES
-                            the path of cookies file which format could be json or plk.
+      -s SESSION, --session SESSION
+                            the path to save session information.
       -u USERNAME, --username USERNAME
                             baidu username. only needed once to generate cookies file.
       -P PASSWORD, --password PASSWORD
@@ -65,10 +65,12 @@ result:
       -a APP_ID, --app-id APP_ID
                             baidu app id. recommended IDs: 498065, 309847, 778750, 250528(official), 265486, 266719. Some of them can bypass 50M download limitation.
       -o, --overwrite       overwrite existing file when it's presented.
+      -l LOG_FILE, --log-file LOG_FILE
+                            specify where to save log.
 ## TODO list
 + upload
 + sync
-+ better exception handling
++ ~~better exception handling~~
 + support external downloader (aria2)
 + robust request
 + proxy
