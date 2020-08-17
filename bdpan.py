@@ -38,14 +38,18 @@ class BdPan:
         if not config['overwrite'] and os.path.exists(f_path):
             return
         print(os.path.join(r_path, f_name))
-        with self.bd_get('download', params={'path': path}, stream=True) as r:
-            if r.status_code != 200:
+        headers = {}
+        if os.path.exists(f_path + '.part'):
+            headers['Range'] = 'bytes=%d-' % os.path.getsize(f_path + '.part')
+        with self.bd_get('download', params={'path': path}, headers=headers, stream=True) as r:
+            if r.status_code >= 400:
                 _ = r.content
                 r.raise_for_status()
             os.makedirs(os.path.join(config['local_path'], r_path), exist_ok=True)
-            with open(f_path, 'wb') as f:
+            with open(f_path + '.part', 'ab') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
+        os.rename(f_path + '.part', f_path)
 
     def _list(self, path, known_dir=False):
         if not known_dir:
