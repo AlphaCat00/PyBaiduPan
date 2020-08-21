@@ -8,10 +8,8 @@ import logging
 from itertools import count
 import pickle
 import shutil
-import requests
 from hashlib import md5
 from functools import partial
-from urllib.parse import quote
 from base64 import b64encode
 
 
@@ -94,7 +92,8 @@ class BdPan:
         res = self.session.get('https://pan.baidu.com/disk/home')
         self.bdstoken = self._get_bdstoken(res.text)
 
-    def download_file(self, bd_path, f_path, overwrite=False):
+    def download_file(self, file_info, f_path, overwrite=False):
+        bd_path = file_info if isinstance(file_info, str) else file_info['path']
         f_path = os.path.join(f_path, os.path.split(bd_path)[1]) if os.path.isdir(f_path) else f_path
         if not overwrite and os.path.exists(f_path):
             return
@@ -110,6 +109,9 @@ class BdPan:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
         shutil.move(f_path + '.part', f_path)
+        if isinstance(file_info, dict):
+            # there is no simple way to modify ctime. so I decide to leave it there.
+            os.utime(f_path, (file_info['local_mtime'], file_info['local_mtime']))
 
     @covert_http_error
     def meta(self, path):
@@ -142,7 +144,7 @@ class BdPan:
                 os.makedirs(local_dir, exist_ok=True)
                 self._download(i['path'], local_dir, True, overwrite)
             else:
-                self.download_file(i['path'], l_path, overwrite)
+                self.download_file(i, l_path, overwrite)
 
     @log_error
     def download(self, src=None, dst=None, overwrite=None):
@@ -168,16 +170,18 @@ class BdPan:
         content_md5, block_list = content_md5.hexdigest(), json.dumps(block_list)
         slice_md5 = md5(next(self.file_slice(f_path, 256 << 10))).hexdigest()
         data = {'path': bd_path, 'size': os.path.getsize(f_path), 'isdir': "0", 'autoinit': 1, 'block_list': block_list,
-                'rtype': 3 if overwrite else 0, 'content-md5': content_md5, "slice-md5": slice_md5}
+                'rtype': 3 if overwrite else 0, 'content-md5': content_md5, "slice-md5": slice_md5,
+                'local_ctime': int(os.path.getctime(f_path)), 'local_mtime': int(os.path.getmtime(f_path))}
         res = self.bd_post('precreate', data=data)
         res = raise_for_errno(res)
         if res['return_type'] == 2:  # rapid upload
             return res['info']
-        params = {'type': 'tmpfile', 'path': quote(bd_path, ''), 'uploadid': res['uploadid']}
+        params = {'type': 'tmpfile', 'path': bd_path, 'uploadid': res['uploadid']}
         for i, x in enumerate(self.file_slice(f_path)):
             params['partseq'] = i
             raise_for_errno(self.bd_post('upload', 'superfile2', api='PCS', params=params, files={'file': x}))
-        data = {k: v for k, v in data.items() if k in ('path', 'size', 'isdir', 'block_list', 'rtype')}
+        fields = ('path', 'size', 'isdir', 'block_list', 'rtype', 'local_ctime', 'local_mtime')
+        data = {k: v for k, v in data.items() if k in fields}
         data['uploadid'] = params['uploadid']
         res = self.bd_post('create', data=data)
         return raise_for_errno(res)

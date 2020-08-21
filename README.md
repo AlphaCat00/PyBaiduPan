@@ -43,7 +43,7 @@ result:
 
 ### download
 #### download file
-    python bdpan.py download /test/07-03-15 19.48.24.png
+    python bdpan.py download "/test/07-03-15 19.48.24.png"
 #### download directory
     python bdpan.py download /test
 #### download to specify path
@@ -54,7 +54,7 @@ result:
 #### upload file and rename
     python bdpan.py upload /test/2.txt 1.txt
 #### upload directory
-    python bdpan.py upload /test some_local_directory
+    python bdpan.py upload /test <local-directory>
 ## full usage
     usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o] [-l LOG_FILE] [action] [pan_path] [local_path]
     
