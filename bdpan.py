@@ -11,7 +11,7 @@ import shutil
 from hashlib import md5
 from functools import partial
 from base64 import b64encode
-
+from datetime import datetime
 
 def log_error(func):
     logger = logging.getLogger('BdPan')
@@ -135,7 +135,8 @@ class BdPan:
     def list(self, path=None):
         path = path or config['pan_path']
         for i in self._list(path):
-            print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']), os.path.split(i['path'])[1])
+            print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']),
+                  datetime.fromtimestamp(i['local_mtime']).strftime('%Y-%m-%dT%H:%M:%S'), os.path.split(i['path'])[1])
 
     def _download(self, bd_path, l_path, known_dir=False, overwrite=False):
         for i in self._list(bd_path, known_dir):
@@ -171,7 +172,7 @@ class BdPan:
         slice_md5 = md5(next(self.file_slice(f_path, 256 << 10))).hexdigest()
         data = {'path': bd_path, 'size': os.path.getsize(f_path), 'isdir': "0", 'autoinit': 1, 'block_list': block_list,
                 'rtype': 3 if overwrite else 0, 'content-md5': content_md5, "slice-md5": slice_md5,
-                'local_ctime': int(os.path.getctime(f_path)), 'local_mtime': int(os.path.getmtime(f_path))}
+                'local_ctime': round(os.path.getctime(f_path)), 'local_mtime': round(os.path.getmtime(f_path))}
         res = self.bd_post('precreate', data=data)
         res = raise_for_errno(res)
         if res['return_type'] == 2:  # rapid upload
