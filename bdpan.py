@@ -36,6 +36,7 @@ class BdPan:
     def __init__(self):
         self.bd_get = partial(self._bd_request, 'get')
         self.bd_post = partial(self._bd_request, 'post')
+        self.act = self.__getattribute__(config['action'])
         self._get_logger()
         self.session = None
         self.bdstoken = None
@@ -93,52 +94,64 @@ class BdPan:
         res = self.session.get('https://pan.baidu.com/disk/home')
         self.bdstoken = self._get_bdstoken(res.text)
 
-    def download_file(self, path, r_path=''):
-        f_name = os.path.split(path)[1]
-        f_path = os.path.join(config['local_path'], r_path, f_name)
-        if not config['overwrite'] and os.path.exists(f_path):
+    def download_file(self, bd_path, f_path, overwrite=False):
+        f_path = os.path.join(f_path, os.path.split(bd_path)[1]) if os.path.isdir(f_path) else f_path
+        if not overwrite and os.path.exists(f_path):
             return
-        self.logger.info(os.path.join(r_path, f_name))
+        self.logger.info(f'download {bd_path} to {f_path}')
         headers = {}
         if os.path.exists(f_path + '.part'):
             headers['Range'] = 'bytes=%d-' % os.path.getsize(f_path + '.part')
-        with self.bd_get('download', api='PCS', params={'path': path}, headers=headers, stream=True) as r:
+        with self.bd_get('download', api='PCS', params={'path': bd_path}, headers=headers, stream=True) as r:
             if r.status_code >= 400:
                 _ = r.content
                 r.raise_for_status()
-            os.makedirs(os.path.join(config['local_path'], r_path), exist_ok=True)
             with open(f_path + '.part', 'ab') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
         shutil.move(f_path + '.part', f_path)
 
+    @covert_http_error
+    def meta(self, path):
+        res = self.bd_get('meta', api='PCS', params={'path': path})
+        res.raise_for_status()
+        return res.json()['list'][0]
+
     def _list(self, path, known_dir=False):
         if not known_dir:
-            res = self.bd_get('meta', api='PCS', params={'path': path})
-            res.raise_for_status()
-            ret = res.json()['list']
-        if known_dir or res.json()['list'][0]['isdir'] == 1:
+            ret = [self.meta(path)]
+        if known_dir or ret[0]['isdir'] == 1:
             ret = []
             for i in count(step=BdPan.LIST_LIMIT):
-                res = self.bd_get('list', params={'dir': path, 'limit': BdPan.LIST_LIMIT, 'start': i})
-                res.raise_for_status()
-                ret += res.json()['list']
-                if len(res.json()['list']) < BdPan.LIST_LIMIT:
+                res = raise_for_errno(self.bd_get('list', params={'dir': path, 'limit': BdPan.LIST_LIMIT, 'start': i}))
+                ret += res['list']
+                if len(res['list']) < BdPan.LIST_LIMIT:
                     break
         return ret
 
     @log_error
-    def list(self, path):
+    def list(self, path=None):
+        path = path or config['pan_path']
         for i in self._list(path):
             print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']), os.path.split(i['path'])[1])
 
-    @log_error
-    def download(self, path, r_path='', known_dir=False):
-        for i in self._list(path, known_dir):
+    def _download(self, bd_path, l_path, known_dir=False, overwrite=False):
+        for i in self._list(bd_path, known_dir):
             if i['isdir']:
-                self.download(i['path'], os.path.join(r_path, os.path.split(i['path'])[1]), True)
+                local_dir = os.path.join(l_path, os.path.split(i['path'])[1])
+                os.makedirs(local_dir, exist_ok=True)
+                self._download(i['path'], local_dir, True, overwrite)
             else:
-                self.download_file(i['path'], r_path)
+                self.download_file(i['path'], l_path, overwrite)
+
+    @log_error
+    def download(self, src=None, dst=None, overwrite=None):
+        src = src or config['pan_path']
+        dst = dst or config['local_path']
+        overwrite = overwrite or config['overwrite']
+        if self.meta(src)['isdir'] == 1:
+            os.makedirs(dst, exist_ok=True)
+        self._download(src, dst, overwrite=overwrite)
 
     @staticmethod
     def file_slice(file, size=UPLOAD_SIZE):
@@ -146,7 +159,7 @@ class BdPan:
             for c in iter(partial(f.read, size), b''):
                 yield c
 
-    def upload_file(self, bd_path, f_path):
+    def upload_file(self, bd_path, f_path, overwrite=False):
         self.logger.info(f'upload {f_path} to {bd_path}')
         content_md5, block_list = md5(), []
         for x in self.file_slice(f_path):
@@ -155,28 +168,57 @@ class BdPan:
         content_md5, block_list = content_md5.hexdigest(), json.dumps(block_list)
         slice_md5 = md5(next(self.file_slice(f_path, 256 << 10))).hexdigest()
         data = {'path': bd_path, 'size': os.path.getsize(f_path), 'isdir': "0", 'autoinit': 1, 'block_list': block_list,
-                'rtype': 0, 'content-md5': content_md5, "slice-md5": slice_md5}
+                'rtype': 3 if overwrite else 0, 'content-md5': content_md5, "slice-md5": slice_md5}
         res = self.bd_post('precreate', data=data)
         res = raise_for_errno(res)
         if res['return_type'] == 2:  # rapid upload
             return res['info']
-        params = {'type': 'tmpfile', 'path': quote(bd_path, ''), 'uploadid': res.json()['uploadid']}
+        params = {'type': 'tmpfile', 'path': quote(bd_path, ''), 'uploadid': res['uploadid']}
         for i, x in enumerate(self.file_slice(f_path)):
             params['partseq'] = i
             raise_for_errno(self.bd_post('upload', 'superfile2', api='PCS', params=params, files={'file': x}))
-        data = {k: v for k, v in data if k in ('path', 'size', 'isdir', 'block_list', 'rtype')}
+        data = {k: v for k, v in data.items() if k in ('path', 'size', 'isdir', 'block_list', 'rtype')}
         data['uploadid'] = params['uploadid']
         res = self.bd_post('create', data=data)
         return raise_for_errno(res)
 
+    def makedir(self, path):
+        data = {'path': path, 'size': 0, 'isdir': "1", 'block_list': '[]', 'rtype': 0}
+        res = self.bd_post('create', data=data)
+        if res.json()['errno'] != -8:  # dir already exist
+            raise_for_errno(res)
 
+    @log_error
+    def upload(self, src=None, dst=None, overwrite=None):
+        src = src or config['local_path']
+        dst = dst or config['pan_path']
+        overwrite = overwrite or config['overwrite']
+        meta = mute_error(self.meta)(dst)
+        if os.path.isfile(src):
+            if meta is not None and meta['isdir'] == 1:
+                dst = os.path.join(dst, os.path.split(src)[1]).replace('\\', '/')
+            if meta is None or meta['isdir'] == 1 or overwrite:
+                self.upload_file(dst, src, overwrite)
+        else:
+            if meta is not None and meta['isdir'] == 0:
+                raise BdApiError('unable to upload a directory to a file.')
+            for root, _, files in os.walk(src):
+                r_path = os.path.relpath(root, src)
+                bd_path = os.path.join(dst, r_path if r_path != '.' else '').replace('\\', '/')
+                self.makedir(bd_path)
+                if not overwrite:
+                    bd_files = self._list(bd_path, True)
+                    f_names = list(map(lambda x: os.path.split(x['path'])[1], bd_files))
+                    files = [f for f in files if f not in f_names]
+                for f in files:
+                    self.upload_file(os.path.join(bd_path, f).replace('\\', '/'), os.path.join(root, f), overwrite)
+
+
+@mute_error
 def main():
-    try:
-        pan = BdPan()
-        pan.login()
-        eval('pan.' + config['action'] + "('" + config['path'] + "')")
-    except Exception as e:
-        pass
+    pan = BdPan()
+    pan.login()
+    pan.act()
 
 
 if __name__ == '__main__':

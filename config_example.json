@@ -1,0 +1,10 @@
+{
+  "username": "your_baidu_username",
+  "password": "your_baidu_password",
+  "app_id": 778750,
+  "local_path": "./download",
+  "pan_path": "/",
+  "overwrite": false,
+  "log_file": "bdpan.log",
+  "session": "session.pkl"
+}

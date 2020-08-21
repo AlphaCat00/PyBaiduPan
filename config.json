@@ -1,9 +1,1 @@
-{
-  "username": "",
-  "password": "",
-  "app_id": 778750,
-  "local_path": "./download",
-  "overwrite": false,
-  "log_file": "",
-  "session": "session.pkl"
-}
+{}

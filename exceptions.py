@@ -20,3 +20,13 @@ def covert_http_error(func):
             raise BdApiError(*e.args, e.response.json())
 
     return wrapper
+
+
+def mute_error(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except BdApiError:
+            pass
+
+    return wrapper
