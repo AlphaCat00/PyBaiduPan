@@ -13,6 +13,7 @@ from functools import partial
 from base64 import b64encode
 from datetime import datetime
 
+
 def log_error(func):
     logger = logging.getLogger('BdPan')
 
@@ -64,6 +65,10 @@ class BdPan:
     def _get_bdstoken(html):
         return re.search("'bdstoken', *'([0-9a-f]+)'", html).group(1)
 
+    @staticmethod
+    def _compare_mtime(path, file_info, op):
+        return os.path.getmtime(path).__getattribute__(f'__{op}__')(file_info['local_mtime'])
+
     def _get_logger(self):
         self.logger = logging.getLogger('BdPan')
         self.logger.setLevel(logging.INFO)
@@ -81,21 +86,22 @@ class BdPan:
         return self.session.request(_method, BdPan.URL[api] + path, params=params, **kwargs)
 
     @log_error
-    def login(self):
+    def login(self, username=None, password=None):
+        username, password = username or config['username'], password or config['password']
         self.session = self.load_session()
         if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
-            infos_return, self.session = Login().baidupan(config['username'], config['password'], 'pc')
-            print(infos_return)
+            infos_return, self.session = Login().baidupan(username, password, 'pc')
             if infos_return['errInfo']['no'] != '0':
                 raise RuntimeError(infos_return)
             self.save_session(self.session)
         res = self.session.get('https://pan.baidu.com/disk/home')
         self.bdstoken = self._get_bdstoken(res.text)
 
-    def download_file(self, file_info, f_path, overwrite=False):
-        bd_path = file_info if isinstance(file_info, str) else file_info['path']
+    def download_file(self, file_info, f_path, overwrite='none'):
+        bd_path = file_info['path']
         f_path = os.path.join(f_path, os.path.split(bd_path)[1]) if os.path.isdir(f_path) else f_path
-        if not overwrite and os.path.exists(f_path):
+        if os.path.exists(f_path) and (overwrite == 'none'
+                                       or (overwrite == 'mtime' and self._compare_mtime(f_path, file_info, 'ge'))):
             return
         self.logger.info(f'download {bd_path} to {f_path}')
         headers = {}
@@ -109,9 +115,8 @@ class BdPan:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
         shutil.move(f_path + '.part', f_path)
-        if isinstance(file_info, dict):
-            # there is no simple way to modify ctime. so I decide to leave it there.
-            os.utime(f_path, (file_info['local_mtime'], file_info['local_mtime']))
+        # there is no simple way to modify ctime. so I decide to leave it there.
+        os.utime(f_path, (file_info['local_mtime'], file_info['local_mtime']))
 
     @covert_http_error
     def meta(self, path):
@@ -138,7 +143,7 @@ class BdPan:
             print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']),
                   datetime.fromtimestamp(i['local_mtime']).strftime('%Y-%m-%dT%H:%M:%S'), os.path.split(i['path'])[1])
 
-    def _download(self, bd_path, l_path, known_dir=False, overwrite=False):
+    def _download(self, bd_path, l_path, known_dir=False, overwrite='none'):
         for i in self._list(bd_path, known_dir):
             if i['isdir']:
                 local_dir = os.path.join(l_path, os.path.split(i['path'])[1])
@@ -162,7 +167,10 @@ class BdPan:
             for c in iter(partial(f.read, size), b''):
                 yield c
 
-    def upload_file(self, bd_path, f_path, overwrite=False):
+    def upload_file(self, bd_path, f_path, overwrite='none', meta=None):
+        if meta is not None and (
+                overwrite == 'none' or (overwrite == 'mtime' and self._compare_mtime(f_path, meta, 'le'))):
+            return
         self.logger.info(f'upload {f_path} to {bd_path}')
         content_md5, block_list = md5(), []
         for x in self.file_slice(f_path):
@@ -171,7 +179,7 @@ class BdPan:
         content_md5, block_list = content_md5.hexdigest(), json.dumps(block_list)
         slice_md5 = md5(next(self.file_slice(f_path, 256 << 10))).hexdigest()
         data = {'path': bd_path, 'size': os.path.getsize(f_path), 'isdir': "0", 'autoinit': 1, 'block_list': block_list,
-                'rtype': 3 if overwrite else 0, 'content-md5': content_md5, "slice-md5": slice_md5,
+                'rtype': 0 if overwrite == 'none' else 3, 'content-md5': content_md5, "slice-md5": slice_md5,
                 'local_ctime': round(os.path.getctime(f_path)), 'local_mtime': round(os.path.getmtime(f_path))}
         res = self.bd_post('precreate', data=data)
         res = raise_for_errno(res)
@@ -202,21 +210,25 @@ class BdPan:
         if os.path.isfile(src):
             if meta is not None and meta['isdir'] == 1:
                 dst = os.path.join(dst, os.path.split(src)[1]).replace('\\', '/')
-            if meta is None or meta['isdir'] == 1 or overwrite:
-                self.upload_file(dst, src, overwrite)
-        else:
+                meta = mute_error(self.meta)(dst)
+            self.upload_file(dst, src, overwrite, meta)
+        elif os.path.isdir(src):
             if meta is not None and meta['isdir'] == 0:
-                raise BdApiError('unable to upload a directory to a file.')
+                raise RuntimeError('upload: unable to upload a directory to a file.')
             for root, _, files in os.walk(src):
                 r_path = os.path.relpath(root, src)
                 bd_path = os.path.join(dst, r_path if r_path != '.' else '').replace('\\', '/')
                 self.makedir(bd_path)
-                if not overwrite:
-                    bd_files = self._list(bd_path, True)
-                    f_names = list(map(lambda x: os.path.split(x['path'])[1], bd_files))
-                    files = [f for f in files if f not in f_names]
-                for f in files:
-                    self.upload_file(os.path.join(bd_path, f).replace('\\', '/'), os.path.join(root, f), overwrite)
+                f_info = {f: None for f in files}
+                if overwrite != 'force':
+                    for x in self._list(bd_path, True):
+                        k = os.path.split(x['path'])[1]
+                        if k in f_info:
+                            f_info[k] = x
+                for f, m in f_info.items():
+                    self.upload_file(os.path.join(bd_path, f).replace('\\', '/'), os.path.join(root, f), overwrite, m)
+        else:
+            raise RuntimeError('upload: local_path must be a file or a directory.')
 
 
 @mute_error

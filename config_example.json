@@ -4,7 +4,7 @@
   "app_id": 778750,
   "local_path": "./download",
   "pan_path": "/",
-  "overwrite": false,
+  "overwrite": "mtime",
   "log_file": "bdpan.log",
   "session": "session.pkl"
 }

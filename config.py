@@ -19,7 +19,8 @@ parser.add_argument('-P', '--password', help="baidu password, only needed once f
 Warning: for security reason, don't save this in config file.", type=str)
 parser.add_argument('-a', '--app-id', help='baidu app id. recommended IDs: 498065, 309847, 778750, 250528(official), \
 265486, 266719. Some of them can bypass 50M download limitation.', type=int)
-parser.add_argument('-o', '--overwrite', action='store_true', help="overwrite existing file when it's presented.")
+parser.add_argument('-o', '--overwrite', choices=['none', 'mtime', 'force'], default='none', help="none\tnever \
+overwrite\nmtime\toverwrite when a newer version of file(base on last modify time) is found.\nforce\talways overwrite.")
 parser.add_argument('-l', '--log-file', help='specify where to save log.', type=str)
 args = parser.parse_args()
 

@@ -14,7 +14,7 @@ Basically is a "reinventing wheel" project of [bypy](https://github.com/houtianz
     python bdpan.py [action] [pan_path] [local_path]
 **action** available actions: list, download, upload. (default: "list")
 
-|  actions     |                   description                  |
+|  action      |                   description                  |
 | :----------- | :--------------------------------------------- |
 | list         | list files and directories in the pan_path. |
 | download     | download all files and directories in the pan_path to local_path. |
@@ -55,8 +55,25 @@ result:
     python bdpan.py upload /test/2.txt 1.txt
 #### upload directory
     python bdpan.py upload /test <local-directory>
-## full usage
-    usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o] [-l LOG_FILE] [action] [pan_path] [local_path]
+## usage
+### overwrite
+    -o/--overwrite <mode>
+overwrite option can use with upload/download.
+
+    python bdpan.py upload /test 1.txt -o mtime
+    
+*warning: this option may lead to **permanent** file loss. use it with caution.*
+
+**mode** available mode: none, mtime, force. (default: "none")
+
+|  mode        |                   description                  |
+| :----------- | :--------------------------------------------- |
+| none         | never overwrite. |
+| mtime        | overwrite when a newer version of file(base on last modify time) is found. |
+| force        | always overwrite.|
+### full usage 
+    usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o {none,mtime,force}] [-l LOG_FILE]
+                    [action] [pan_path] [local_path]
     
      a Python client for Baidu Pan.
     
@@ -83,7 +100,10 @@ result:
                             baidu password, only needed once for authorization. Warning: for security reason, don't save this in config file.
       -a APP_ID, --app-id APP_ID
                             baidu app id. recommended IDs: 498065, 309847, 778750, 250528(official), 265486, 266719. Some of them can bypass 50M download limitation.
-      -o, --overwrite       overwrite existing file when it's presented.
+      -o {none,mtime,force}, --overwrite {none,mtime,force}
+                            none    never overwrite
+                            mtime   overwrite when a newer version of file(base on last modify time) is found.
+                            force   always overwrite.
       -l LOG_FILE, --log-file LOG_FILE
                             specify where to save log.
 ## TODO list
