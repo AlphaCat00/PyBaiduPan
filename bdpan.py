@@ -3,7 +3,7 @@ import os
 import re
 from exceptions import *
 from DecryptLogin.login import Login
-from config import config
+from config import get_config, DEFAULT_CONFIG
 import logging
 from itertools import count
 import pickle
@@ -19,7 +19,8 @@ class BdPan:
     LIST_LIMIT = 5000
     UPLOAD_SIZE = 4 << 20
 
-    def __init__(self):
+    def __init__(self, config=DEFAULT_CONFIG):
+        self.config = config
         self.bd_get = partial(self._bd_request, 'get')
         self.bd_post = partial(self._bd_request, 'post')
         self.act = self.__getattribute__(config['action'])
@@ -57,13 +58,13 @@ class BdPan:
     def _get_logger(self):
         self.logger = logging.getLogger('BdPan')
         self.logger.setLevel(logging.INFO)
-        ch = logging.FileHandler(config["log_file"]) if config.get("log_file") else logging.StreamHandler()
+        ch = logging.FileHandler(self.config["log_file"]) if self.config.get("log_file") else logging.StreamHandler()
         ch.setLevel(logging.INFO)
         ch.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
         self.logger.addHandler(ch)
 
     def _bd_request(self, _method, method, path='file', api='XPAN', params={}, **kwargs):
-        params['app_id'] = config['app_id']
+        params['app_id'] = self.config['app_id']
         params['method'] = method
         if api == 'XPAN' and self.bdstoken:
             params['bdstoken'] = self.bdstoken
@@ -72,8 +73,8 @@ class BdPan:
 
     @log_error
     def login(self, username=None, password=None, s_file=None):
-        username, password = username or config['username'], password or config['password']
-        s_file = s_file or config['session']
+        username, password = username or self.config['username'], password or self.config['password']
+        s_file = s_file or self.config['session']
         self._load_session(s_file)
         if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
             infos_return, self.session = Login().baidupan(username, password, 'pc')
@@ -85,7 +86,7 @@ class BdPan:
 
     @log_error
     def logout(self, s_file=None):
-        s_file = s_file or config['session']
+        s_file = s_file or self.config['session']
         try:
             os.remove(s_file)
         except FileNotFoundError:
@@ -133,11 +134,15 @@ class BdPan:
         return ret
 
     @log_error
-    def list(self, path=None):
-        path = path or config['pan_path']
-        for i in self._list(path):
-            print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']),
-                  datetime.fromtimestamp(i['local_mtime']).strftime('%Y-%m-%dT%H:%M:%S'), os.path.split(i['path'])[1])
+    def list(self, path=None, show=True):
+        path = path or self.config['pan_path']
+        ls = self._list(path)
+        if show:
+            for i in ls:
+                print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']),
+                      datetime.fromtimestamp(i['local_mtime']).strftime('%Y-%m-%dT%H:%M:%S'),
+                      os.path.split(i['path'])[1])
+        return ls
 
     def _download(self, bd_path, l_path, known_dir=False, overwrite='none', delete_extra=False):
         f_info = self._list(bd_path, known_dir)
@@ -160,10 +165,10 @@ class BdPan:
 
     @log_error
     def download(self, src=None, dst=None, overwrite=None, delete_extra=None):
-        src = src or config['pan_path']
-        dst = dst or config['local_path']
-        overwrite = overwrite or config['overwrite']
-        delete_extra = delete_extra or config['delete_extra']
+        src = src or self.config['pan_path']
+        dst = dst or self.config['local_path']
+        overwrite = overwrite or self.config['overwrite']
+        delete_extra = delete_extra or self.config['delete_extra']
         if self.meta(src)['isdir'] == 1:
             os.makedirs(dst, exist_ok=True)
         self._download(src, dst, overwrite=overwrite, delete_extra=delete_extra)
@@ -220,10 +225,10 @@ class BdPan:
 
     @log_error
     def upload(self, src=None, dst=None, overwrite=None, delete_extra=None):
-        src = src or config['local_path']
-        dst = dst or config['pan_path']
-        overwrite = overwrite or config['overwrite']
-        delete_extra = delete_extra or config['delete_extra']
+        src = src or self.config['local_path']
+        dst = dst or self.config['pan_path']
+        overwrite = overwrite or self.config['overwrite']
+        delete_extra = delete_extra or self.config['delete_extra']
         meta = mute_error(self.meta)(dst)
         if os.path.isfile(src):
             if meta is not None and meta['isdir'] == 1:
@@ -255,16 +260,16 @@ class BdPan:
             raise RuntimeError('upload: local_path must be a file or a directory.')
 
     def sync(self, pan_path=None, local_path=None, overwrite=None):
-        local_path = local_path or config['local_path']
-        pan_path = pan_path or config['pan_path']
-        overwrite = overwrite or config['overwrite']
+        local_path = local_path or self.config['local_path']
+        pan_path = pan_path or self.config['pan_path']
+        overwrite = overwrite or self.config['overwrite']
         self.download(pan_path, local_path, overwrite, False)
         self.upload(local_path, pan_path, overwrite, False)
 
 
 @mute_error
 def main():
-    pan = BdPan()
+    pan = BdPan(get_config())
     pan.login()
     pan.act()
 

@@ -27,21 +27,27 @@ overwrite\nmtime\toverwrite when a newer version of file(base on last modify tim
 parser.add_argument('-l', '--log-file', help='specify where to save log.', type=str)
 parser.add_argument('-d', '--delete-extra', action='store_true', help='delete all extra files and directories in dst_\
 path. do NOT use this option unless you know exactly what you are doing. ')
-args = parser.parse_args()
 
-config = {'session': "session.pkl", 'username': '', 'password': '', 'app_id': 778750,
-          'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': '', "delete_extra": False}
-conf_f = {}
-try:
-    with open(args.conf) as f:
-        conf_f = json.load(f)
-except FileNotFoundError:
-    pass
+DEFAULT_CONFIG = {'session': "session.pkl", 'username': '', 'password': '', 'app_id': 778750,
+                  'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': '', "delete_extra": False}
 
-for i in (conf_f.items(), vars(args).items()):
-    for k, v in i:
-        if v:
-            config[k] = v
+
+def get_config():
+    config = DEFAULT_CONFIG
+    args = parser.parse_args()
+    conf_f = {}
+    try:
+        with open(args.conf) as f:
+            conf_f = json.load(f)
+    except FileNotFoundError:
+        pass
+
+    for i in (conf_f.items(), vars(args).items()):
+        for k, v in i:
+            if v:
+                config[k] = v
+    return config
+
 
 if __name__ == '__main__':
-    print(config)
+    print(get_config())
