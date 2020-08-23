@@ -5,6 +5,7 @@
   "local_path": "./download",
   "pan_path": "/",
   "overwrite": "mtime",
+  "delete_extra": false,
   "log_file": "bdpan.log",
   "session": "session.pkl"
 }

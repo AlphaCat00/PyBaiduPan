@@ -22,10 +22,12 @@ parser.add_argument('-a', '--app-id', help='baidu app id. recommended IDs: 49806
 parser.add_argument('-o', '--overwrite', choices=['none', 'mtime', 'force'], default='none', help="none\tnever \
 overwrite\nmtime\toverwrite when a newer version of file(base on last modify time) is found.\nforce\talways overwrite.")
 parser.add_argument('-l', '--log-file', help='specify where to save log.', type=str)
+parser.add_argument('-d', '--delete-extra', action='store_true', help='delete all extra files and directories in dst_\
+path. do NOT use this option unless you know exactly what you are doing. ')
 args = parser.parse_args()
 
 config = {'session': "session.pkl", 'username': '', 'password': '', 'app_id': 778750,
-          'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': ''}
+          'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': '', "delete_extra": False}
 conf_f = {}
 try:
     with open(args.conf) as f:

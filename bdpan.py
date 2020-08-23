@@ -14,19 +14,6 @@ from base64 import b64encode
 from datetime import datetime
 
 
-def log_error(func):
-    logger = logging.getLogger('BdPan')
-
-    def wrapper(*args, **kwargs):
-        try:
-            return covert_http_error(func)(*args, **kwargs)
-        except BdApiError as e:
-            logger.error(e)
-            raise e
-
-    return wrapper
-
-
 class BdPan:
     URL = {'PCS': 'https://pcs.baidu.com/rest/2.0/pcs/', 'XPAN': 'https://pan.baidu.com/rest/2.0/xpan/'}
     LIST_LIMIT = 5000
@@ -143,26 +130,40 @@ class BdPan:
             print(['F', 'D'][i['isdir']], '%6s' % self.sizeof_fmt(i['size']),
                   datetime.fromtimestamp(i['local_mtime']).strftime('%Y-%m-%dT%H:%M:%S'), os.path.split(i['path'])[1])
 
-    def _download(self, bd_path, l_path, known_dir=False, overwrite='none'):
-        for i in self._list(bd_path, known_dir):
+    def _download(self, bd_path, l_path, known_dir=False, overwrite='none', delete_extra=False):
+        f_info = self._list(bd_path, known_dir)
+        for i in f_info:
             if i['isdir']:
                 local_dir = os.path.join(l_path, os.path.split(i['path'])[1])
                 os.makedirs(local_dir, exist_ok=True)
-                self._download(i['path'], local_dir, True, overwrite)
+                self._download(i['path'], local_dir, True, overwrite, delete_extra)
             else:
                 self.download_file(i, l_path, overwrite)
+        if delete_extra and os.path.isdir(l_path):
+            f_name = [os.path.split(i['path'])[1] for i in f_info]
+            for f in os.listdir(l_path):
+                if f not in f_name:
+                    try:
+                        shutil.rmtree(os.path.join(l_path, f))
+                    except NotADirectoryError:
+                        os.remove(os.path.join(l_path, f))
+                    self.logger.info(f'delete extra: {os.path.join(l_path, f)}')
 
     @log_error
-    def download(self, src=None, dst=None, overwrite=None):
+    def download(self, src=None, dst=None, overwrite=None, delete_extra=None):
         src = src or config['pan_path']
         dst = dst or config['local_path']
         overwrite = overwrite or config['overwrite']
+        delete_extra = delete_extra or config['delete_extra']
         if self.meta(src)['isdir'] == 1:
             os.makedirs(dst, exist_ok=True)
-        self._download(src, dst, overwrite=overwrite)
+        self._download(src, dst, overwrite=overwrite, delete_extra=delete_extra)
 
     @staticmethod
     def file_slice(file, size=UPLOAD_SIZE):
+        if os.path.getsize(file) == 0:
+            yield b''
+            return
         with open(file, 'rb') as f:
             for c in iter(partial(f.read, size), b''):
                 yield c
@@ -201,11 +202,19 @@ class BdPan:
         if res.json()['errno'] != -8:  # dir already exist
             raise_for_errno(res)
 
+    def remove(self, *path):
+        if len(path) == 0:
+            return
+        self.logger.info(f'remove: {path}')
+        raise_for_errno(self.bd_post('filemanager', params={'opera': 'delete', 'async': 0, 'onnest': 'fail'},
+                                     data={'filelist': json.dumps(path)}))
+
     @log_error
-    def upload(self, src=None, dst=None, overwrite=None):
+    def upload(self, src=None, dst=None, overwrite=None, delete_extra=None):
         src = src or config['local_path']
         dst = dst or config['pan_path']
         overwrite = overwrite or config['overwrite']
+        delete_extra = delete_extra or config['delete_extra']
         meta = mute_error(self.meta)(dst)
         if os.path.isfile(src):
             if meta is not None and meta['isdir'] == 1:
@@ -215,18 +224,24 @@ class BdPan:
         elif os.path.isdir(src):
             if meta is not None and meta['isdir'] == 0:
                 raise RuntimeError('upload: unable to upload a directory to a file.')
-            for root, _, files in os.walk(src):
+            for root, dirs, files in os.walk(src):
                 r_path = os.path.relpath(root, src)
                 bd_path = os.path.join(dst, r_path if r_path != '.' else '').replace('\\', '/')
                 self.makedir(bd_path)
                 f_info = {f: None for f in files}
                 if overwrite != 'force':
-                    for x in self._list(bd_path, True):
+                    bd_dir = self._list(bd_path, True)
+                    for x in bd_dir:
                         k = os.path.split(x['path'])[1]
                         if k in f_info:
                             f_info[k] = x
                 for f, m in f_info.items():
                     self.upload_file(os.path.join(bd_path, f).replace('\\', '/'), os.path.join(root, f), overwrite, m)
+                if delete_extra:
+                    if overwrite == 'force':
+                        bd_dir = self._list(bd_path, True)
+                    d_f = [x['path'] for x in bd_dir if os.path.split(x['path'])[1] not in files + dirs]
+                    self.remove(*d_f)
         else:
             raise RuntimeError('upload: local_path must be a file or a directory.')
 

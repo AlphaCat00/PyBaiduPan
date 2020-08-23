@@ -30,3 +30,19 @@ def mute_error(func):
             pass
 
     return wrapper
+
+
+def log_error(func):
+    import logging
+    logger = logging.getLogger('BdPan')
+
+    def wrapper(*args, **kwargs):
+        try:
+            return covert_http_error(func)(*args, **kwargs)
+        except Exception as e:
+            if not hasattr(e, 'is_logged'):
+                logger.error(e)
+                e.is_logged = True
+            raise e
+
+    return wrapper

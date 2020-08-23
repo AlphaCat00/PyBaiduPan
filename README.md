@@ -71,8 +71,19 @@ overwrite option can use with upload/download.
 | none         | never overwrite. |
 | mtime        | overwrite when a newer version of file(base on last modify time) is found. |
 | force        | always overwrite.|
+### delete extra
+delete all extra files and directories in dst_path(pan_path for upload, local_path for download).
+
+this option will make sure that dst_path is same as src_path.
+
+    -d/--delete-extra
+    
+delete extra option can use with upload/download.
+
+*warning: this option may lead to **permanent** file loss. use it with caution.*
+ 
 ### full usage 
-    usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o {none,mtime,force}] [-l LOG_FILE]
+    usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o {none,mtime,force}] [-l LOG_FILE] [-d]
                     [action] [pan_path] [local_path]
     
      a Python client for Baidu Pan.
@@ -106,6 +117,7 @@ overwrite option can use with upload/download.
                             force   always overwrite.
       -l LOG_FILE, --log-file LOG_FILE
                             specify where to save log.
+      -d, --delete-extra    delete all extra files and directories in dst_path. do NOT use this option unless you know exactly what you are doing.
 ## TODO list
 + ~~upload~~
 + sync
