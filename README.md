@@ -1,17 +1,19 @@
 # PyBaiduPan
-A python client for Baidu Pan to download, upload, and sync files.  Mainly design to use on nas.
+A python client for Baidu Pan to download, upload, and sync files.  Mainly design to use on NAS.
 
-Basically is a "reinventing wheel" project of [bypy](https://github.com/houtianze/bypy) to bypass 50M download limitation using app_id.
-## requirements
-1. python3
-2. DecryptLogin
+## Feature
++ recurse download/upload
++ bypass 50M download limitation using app_id
++ rapid upload
++ directory sync
++ use a newer version of [baidu pan API](https://pan.baidu.com/union/document/basic)
 
-
-    pip install DecryptLogin
-## installation
-    git clone https://github.com/Mad-Devil/PyBaiduPan.git
-## get started
-    python bdpan.py [action] [pan_path] [local_path]
+## Requirements
+python3 (>=3.6)
+## Installation
+    pip install pyBaiduPan
+## Get Started
+    BdPan [action] [pan_path] [local_path]
 **action** available actions: list, download, upload, sync, logout. (default: "list")
 
 |  action      |                   description                  |
@@ -25,15 +27,15 @@ Basically is a "reinventing wheel" project of [bypy](https://github.com/houtianz
 **pan_path** absolute path in Baidu Pan, which can be file or directory.
 
 **local_path** local path, which can be file or directory.
-### first time use
+### First Time Use
 Need to specify username and password for authorization.
 
-     python bdpan.py -u your_username -P your_password
+     BdPan -u your_username -P your_password
 captcha or email/phone verification may be required.
-### list
+### List
 list files and directories in the path.
 
-    python bdpan.py list /test
+    BdPan list /test
 result:
 
     D   0.0B folder_1
@@ -43,42 +45,42 @@ result:
     F   1.2M 07-03-15 19.48.44.png
     F   1.2M 07-03-15 19.48.24.png
 
-### download
-#### download file
-    python bdpan.py download "/test/07-03-15 19.48.24.png"
+### Download
+#### download File
+    BdPan download "/test/07-03-15 19.48.24.png"
 #### download directory
-    python bdpan.py download /test
+    BdPan download /test
 #### download to specify path
-    python bdpan.py download /test <local-path>
-### upload
+    BdPan download /test <local-path>
+### Upload
 #### upload file
-    python bdpan.py upload /test 1.txt
+    BdPan upload /test 1.txt
 #### upload file and rename
-    python bdpan.py upload /test/2.txt 1.txt
+    BdPan upload /test/2.txt 1.txt
 #### upload directory
-    python bdpan.py upload /test <local-directory>
-### sync
+    BdPan upload /test <local-directory>
+### Sync
 #### sync two directory
-    python bdpan.py sync /test test_folder
+    BdPan sync /test test_folder
 sync action has the same effect as following commands:
 
-    python bdpan.py download /test test_folder
-    python bdpan.py upload /test test_folder
+    BdPan download /test test_folder
+    BdPan upload /test test_folder
 use -o mtime option to overwrite old files:
 
-    python bdpan.py sync /test test_folder -o mtime
+    BdPan sync /test test_folder -o mtime
 #### sync up
-    python bdpan.py upload /test test_folder -o mtime -d
+    BdPan upload /test test_folder -o mtime -d
 this command will make sure /test is same as test_folder.
 #### sync down
-    python bdpan.py download /test test_folder -o mtime -d
+    BdPan download /test test_folder -o mtime -d
 this command will make sure test_folder is same as /test.
-## usage
-### overwrite
+## Usage
+### Overwrite
     -o/--overwrite <mode>
 overwrite option can use with upload/download/sync.
 
-    python bdpan.py upload /test 1.txt -o mtime
+    BdPan upload /test 1.txt -o mtime
     
 *warning: this option may lead to **permanent** file loss. use it with caution.*
 
@@ -89,7 +91,7 @@ overwrite option can use with upload/download/sync.
 | none         | never overwrite. |
 | mtime        | overwrite when a newer version of file(base on last modify time) is found. |
 | force        | always overwrite.|
-### delete extra
+### Delete Extra
 delete all extra files and directories in dst_path(pan_path for upload, local_path for download).
 
 this option will make sure that dst_path is same as src_path.
@@ -100,7 +102,7 @@ delete extra option can use with upload/download.
 
 *warning: this option may lead to **permanent** file loss. use it with caution.*
  
-### full usage 
+### Full Usage 
     usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o {none,mtime,force}] [-l LOG_FILE] [-d]
                     [action] [pan_path] [local_path]
     
@@ -138,11 +140,11 @@ delete extra option can use with upload/download.
       -l LOG_FILE, --log-file LOG_FILE
                             specify where to save log.
       -d, --delete-extra    delete all extra files and directories in dst_path. do NOT use this option unless you know exactly what you are doing.
-## TODO list
+## TODO List
 + ~~upload~~
 + ~~sync~~
 + ~~better exception handling~~
 + support external downloader (aria2)
 + robust request
 + proxy
-+ test.py
++ tests

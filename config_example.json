@@ -7,5 +7,5 @@
   "overwrite": "mtime",
   "delete_extra": false,
   "log_file": "bdpan.log",
-  "session": "session.pkl"
+  "session": "~/.BdPan/session.pkl"
 }

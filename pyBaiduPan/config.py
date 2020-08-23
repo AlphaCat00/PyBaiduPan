@@ -28,7 +28,7 @@ parser.add_argument('-l', '--log-file', help='specify where to save log.', type=
 parser.add_argument('-d', '--delete-extra', action='store_true', help='delete all extra files and directories in dst_\
 path. do NOT use this option unless you know exactly what you are doing. ')
 
-DEFAULT_CONFIG = {'session': "session.pkl", 'username': '', 'password': '', 'app_id': 778750,
+DEFAULT_CONFIG = {'session': "~/.BdPan/session.pkl", 'username': '', 'password': '', 'app_id': 778750,
                   'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': '', "delete_extra": False}
 
 

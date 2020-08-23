@@ -25,7 +25,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     keywords=['baidu pcs', 'baidu yun', 'baidu pan', 'baidu netdisk',
-              'baidu cloud storage', 'baidu personal cloud storage',],
+              'baidu cloud storage', 'baidu personal cloud storage'],
     python_requires='>=3.6',
     install_requires=['DecryptLogin>=0.1.19']
 )

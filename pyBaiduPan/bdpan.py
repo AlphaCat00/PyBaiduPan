@@ -1,9 +1,9 @@
 import json
 import os
 import re
-from .exceptions import *
+from pyBaiduPan.exceptions import *
 from DecryptLogin.login import Login
-from .config import get_config, DEFAULT_CONFIG
+from pyBaiduPan.config import get_config, DEFAULT_CONFIG
 import logging
 from itertools import count
 import pickle
@@ -36,6 +36,7 @@ class BdPan:
             pass
 
     def _save_session(self, s_file):
+        os.makedirs(os.path.split(s_file)[0], exist_ok=True)
         with open(s_file, 'wb') as f:
             pickle.dump(self.session, f)
 
@@ -74,7 +75,7 @@ class BdPan:
     @log_error
     def login(self, username=None, password=None, s_file=None):
         username, password = username or self.config['username'], password or self.config['password']
-        s_file = s_file or self.config['session']
+        s_file = s_file or os.path.expanduser(self.config['session'])
         self._load_session(s_file)
         if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
             infos_return, self.session = Login().baidupan(username, password, 'pc')
