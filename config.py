@@ -3,11 +3,14 @@ import json
 from argparse import RawTextHelpFormatter
 
 parser = argparse.ArgumentParser(description=' a Python client for Baidu Pan.', formatter_class=RawTextHelpFormatter)
-parser.add_argument('action', choices=['list', 'download', 'upload'], metavar='action', default='list', nargs='?',
-                    help='available actions: list, download, upload. (default: "list")\n\
+parser.add_argument('action', choices=['list', 'download', 'upload', 'sync', 'logout'], metavar='action',
+                    default='list', nargs='?',
+                    help='available actions: list, download, upload, sync, logout. (default: "list")\n\
 list\t\tlist files and directories in the pan_path.\n\
 download\tdownload all files and directories in the pan_path to local_path.\n\
-upload\t\tupload all files and directories in the local_path to pan_path.\n')
+upload\t\tupload all files and directories in the local_path to pan_path.\n\
+sync\t\tlocal_path and pan_path sync to each other.\n\
+logout\t\tdelete all credentials.\n')
 parser.add_argument('pan_path', help='absolute path in Baidu Pan, which can be file or directory.', nargs='?')
 parser.add_argument('local_path', help='local path, which can be file or directory.', nargs='?')
 parser.add_argument('-p', '--local-path', help='an alias of local_path. (default: ".")', type=str)

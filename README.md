@@ -1,5 +1,5 @@
 # PyBaiduPan
-A python client for Baidu Pan to download, upload, and ~~sync~~ files.  Mainly design to use on nas.
+A python client for Baidu Pan to download, upload, and sync files.  Mainly design to use on nas.
 
 Basically is a "reinventing wheel" project of [bypy](https://github.com/houtianze/bypy) to bypass 50M download limitation using app_id.
 ## requirements
@@ -12,13 +12,15 @@ Basically is a "reinventing wheel" project of [bypy](https://github.com/houtianz
     git clone https://github.com/Mad-Devil/PyBaiduPan.git
 ## get started
     python bdpan.py [action] [pan_path] [local_path]
-**action** available actions: list, download, upload. (default: "list")
+**action** available actions: list, download, upload, sync, logout. (default: "list")
 
 |  action      |                   description                  |
 | :----------- | :--------------------------------------------- |
 | list         | list files and directories in the pan_path. |
 | download     | download all files and directories in the pan_path to local_path. |
 | upload       | upload all files and directories in the local_path to pan_path. |
+| sync         | local_path and pan_path sync to each other. |
+| logout       | delete all credentials. |
 
 **pan_path** absolute path in Baidu Pan, which can be file or directory.
 
@@ -55,10 +57,26 @@ result:
     python bdpan.py upload /test/2.txt 1.txt
 #### upload directory
     python bdpan.py upload /test <local-directory>
+### sync
+#### sync two directory
+    python bdpan.py sync /test test_folder
+sync action has the same effect as following commands:
+
+    python bdpan.py download /test test_folder
+    python bdpan.py upload /test test_folder
+use -o mtime option to overwrite old files:
+
+    python bdpan.py sync /test test_folder -o mtime
+#### sync up
+    python bdpan.py upload /test test_folder -o mtime -d
+this command will make sure /test is same as test_folder.
+#### sync down
+    python bdpan.py download /test test_folder -o mtime -d
+this command will make sure test_folder is same as /test.
 ## usage
 ### overwrite
     -o/--overwrite <mode>
-overwrite option can use with upload/download.
+overwrite option can use with upload/download/sync.
 
     python bdpan.py upload /test 1.txt -o mtime
     
@@ -89,10 +107,12 @@ delete extra option can use with upload/download.
      a Python client for Baidu Pan.
     
     positional arguments:
-      action                available actions: list, download, upload. (default: "list")
+      action                available actions: list, download, upload, sync, logout. (default: "list")
                             list            list files and directories in the pan_path.
                             download        download all files and directories in the pan_path to local_path.
                             upload          upload all files and directories in the local_path to pan_path.
+                            sync            local_path and pan_path sync to each other.
+                            logout          delete all credentials.
       pan_path              absolute path in Baidu Pan, which can be file or directory.
       local_path            local path, which can be file or directory.
     
@@ -120,7 +140,7 @@ delete extra option can use with upload/download.
       -d, --delete-extra    delete all extra files and directories in dst_path. do NOT use this option unless you know exactly what you are doing.
 ## TODO list
 + ~~upload~~
-+ sync
++ ~~sync~~
 + ~~better exception handling~~
 + support external downloader (aria2)
 + robust request

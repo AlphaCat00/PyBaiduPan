@@ -27,18 +27,16 @@ class BdPan:
         self.session = None
         self.bdstoken = None
 
-    @staticmethod
-    def load_session():
+    def _load_session(self, s_file):
         try:
-            with open(config['session'], 'rb') as f:
-                return pickle.load(f)
+            with open(s_file, 'rb') as f:
+                self.session = pickle.load(f)
         except:
             pass
 
-    @staticmethod
-    def save_session(session):
-        with open(config['session'], 'wb') as f:
-            pickle.dump(session, f)
+    def _save_session(self, s_file):
+        with open(s_file, 'wb') as f:
+            pickle.dump(self.session, f)
 
     @staticmethod
     def sizeof_fmt(num):
@@ -73,16 +71,27 @@ class BdPan:
         return self.session.request(_method, BdPan.URL[api] + path, params=params, **kwargs)
 
     @log_error
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, s_file=None):
         username, password = username or config['username'], password or config['password']
-        self.session = self.load_session()
+        s_file = s_file or config['session']
+        self._load_session(s_file)
         if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
             infos_return, self.session = Login().baidupan(username, password, 'pc')
             if infos_return['errInfo']['no'] != '0':
                 raise RuntimeError(infos_return)
-            self.save_session(self.session)
+        self._save_session(s_file)
         res = self.session.get('https://pan.baidu.com/disk/home')
         self.bdstoken = self._get_bdstoken(res.text)
+
+    @log_error
+    def logout(self, s_file=None):
+        s_file = s_file or config['session']
+        try:
+            os.remove(s_file)
+        except FileNotFoundError:
+            pass
+        self.session = None
+        self.bdstoken = None
 
     def download_file(self, file_info, f_path, overwrite='none'):
         bd_path = file_info['path']
@@ -244,6 +253,13 @@ class BdPan:
                     self.remove(*d_f)
         else:
             raise RuntimeError('upload: local_path must be a file or a directory.')
+
+    def sync(self, pan_path=None, local_path=None, overwrite=None):
+        local_path = local_path or config['local_path']
+        pan_path = pan_path or config['pan_path']
+        overwrite = overwrite or config['overwrite']
+        self.download(pan_path, local_path, overwrite, False)
+        self.upload(local_path, pan_path, overwrite, False)
 
 
 @mute_error
