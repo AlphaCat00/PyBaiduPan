@@ -1,9 +1,9 @@
 import json
 import os
 import re
-from exceptions import *
+from .exceptions import *
 from DecryptLogin.login import Login
-from config import get_config, DEFAULT_CONFIG
+from .config import get_config, DEFAULT_CONFIG
 import logging
 from itertools import count
 import pickle
