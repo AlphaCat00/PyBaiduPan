@@ -4,8 +4,10 @@ A python client for Baidu Pan to download, upload, and sync files.  Mainly desig
 ## Feature
 + recurse download/upload
 + bypass 50M download limitation using app_id
++ resume downloading form the breakpoint
 + rapid upload
 + directory sync
++ retry on failures
 + use a newer version of [baidu pan API](https://pan.baidu.com/union/document/basic)
 
 ## Requirements
@@ -140,11 +142,23 @@ delete extra option can use with upload/download.
       -l LOG_FILE, --log-file LOG_FILE
                             specify where to save log.
       -d, --delete-extra    delete all extra files and directories in dst_path. do NOT use this option unless you know exactly what you are doing.
+## Use in other python program
+```python
+from pyBaiduPan import BdPan
+
+pan = BdPan()
+pan.config['app_id'] = 250528  # change some configuration
+pan.login('your_username', 'your_password')  # login
+pan.download('/test/1.jpg', './download')  # download
+pan.upload('./backup', '/test', overwrite='mtime', delete_extra=True)  # sync up
+# ... or other class methods of BdPan
+
+```
 ## TODO List
 + ~~upload~~
 + ~~sync~~
 + ~~better exception handling~~
 + support external downloader (aria2)
-+ robust request
++ ~~robust request~~
 + proxy
 + tests

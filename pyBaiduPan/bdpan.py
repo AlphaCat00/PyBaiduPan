@@ -12,12 +12,14 @@ from hashlib import md5
 from functools import partial
 from base64 import b64encode
 from datetime import datetime
+import time
 
 
 class BdPan:
     URL = {'PCS': 'https://pcs.baidu.com/rest/2.0/pcs/', 'XPAN': 'https://pan.baidu.com/rest/2.0/xpan/'}
     LIST_LIMIT = 5000
     UPLOAD_SIZE = 4 << 20
+    MAX_RETRY = 3
 
     def __init__(self, config=DEFAULT_CONFIG):
         self.config = config
@@ -64,20 +66,41 @@ class BdPan:
         ch.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
         self.logger.addHandler(ch)
 
-    def _bd_request(self, _method, method, path='file', api='XPAN', params={}, **kwargs):
+    def _bd_request(self, _method, method, path='file', api='XPAN', params={}, skip_errno=(), **kwargs):
         params['app_id'] = self.config['app_id']
         params['method'] = method
         if api == 'XPAN' and self.bdstoken:
             params['bdstoken'] = self.bdstoken
             params['logid'] = b64encode(self.session.cookies['BAIDUID'].encode('ascii'))
-        return self.session.request(_method, BdPan.URL[api] + path, params=params, **kwargs)
+        error = None
+        for i in range(BdPan.MAX_RETRY):
+            try:
+                return self._request(_method, BdPan.URL[api] + path, api, skip_errno, params=params, **kwargs)
+            except Exception as e:
+                self.logger.info(f'retrying {i + 1}/{BdPan.MAX_RETRY}')
+                time.sleep(10)
+                error = e
+        raise error
+
+    @log_error
+    def _request(self, method, url, api, skip_errno=(), **kwargs):
+        res = self.session.request(method, url, **kwargs)
+        info = None
+        if api == 'PCS' and res.status_code >= 400:
+            _ = res.content
+            info = res.json()
+        elif api == 'XPAN' and res.json().get('errno') not in (None, 0):
+            info = res.json()
+        if info is not None and info.get('errno') not in skip_errno and info.get('error_code') not in skip_errno:
+            raise BdApiError((method, res.url, info))
+        return res
 
     @log_error
     def login(self, username=None, password=None, s_file=None):
         username, password = username or self.config['username'], password or self.config['password']
         s_file = s_file or os.path.expanduser(self.config['session'])
         self._load_session(s_file)
-        if self.session is None or self.bd_get('uinfo', 'nas').json()["errno"] != 0:
+        if self.session is None or mute_error(self.bd_get)('uinfo', 'nas') is None:
             infos_return, self.session = Login().baidupan(username, password, 'pc')
             if infos_return['errInfo']['no'] != '0':
                 raise RuntimeError(infos_return)
@@ -106,9 +129,6 @@ class BdPan:
         if os.path.exists(f_path + '.part'):
             headers['Range'] = 'bytes=%d-' % os.path.getsize(f_path + '.part')
         with self.bd_get('download', api='PCS', params={'path': bd_path}, headers=headers, stream=True) as r:
-            if r.status_code >= 400:
-                _ = r.content
-                r.raise_for_status()
             with open(f_path + '.part', 'ab') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
@@ -116,11 +136,11 @@ class BdPan:
         # there is no simple way to modify ctime. so I decide to leave it there.
         os.utime(f_path, (file_info['local_mtime'], file_info['local_mtime']))
 
-    @covert_http_error
-    def meta(self, path):
-        res = self.bd_get('meta', api='PCS', params={'path': path})
-        res.raise_for_status()
-        return res.json()['list'][0]
+    def meta(self, path, ignore_file_not_exist=False):
+        skip_errno = (31066,) if ignore_file_not_exist else ()
+        res = self.bd_get('meta', api='PCS', params={'path': path}, skip_errno=skip_errno)
+        if res.status_code < 400:
+            return res.json()['list'][0]
 
     def _list(self, path, known_dir=False):
         if not known_dir:
@@ -128,7 +148,7 @@ class BdPan:
         if known_dir or ret[0]['isdir'] == 1:
             ret = []
             for i in count(step=BdPan.LIST_LIMIT):
-                res = raise_for_errno(self.bd_get('list', params={'dir': path, 'limit': BdPan.LIST_LIMIT, 'start': i}))
+                res = self.bd_get('list', params={'dir': path, 'limit': BdPan.LIST_LIMIT, 'start': i}).json()
                 ret += res['list']
                 if len(res['list']) < BdPan.LIST_LIMIT:
                     break
@@ -197,32 +217,28 @@ class BdPan:
         data = {'path': bd_path, 'size': os.path.getsize(f_path), 'isdir': "0", 'autoinit': 1, 'block_list': block_list,
                 'rtype': 0 if overwrite == 'none' else 3, 'content-md5': content_md5, "slice-md5": slice_md5,
                 'local_ctime': round(os.path.getctime(f_path)), 'local_mtime': round(os.path.getmtime(f_path))}
-        res = self.bd_post('precreate', data=data)
-        res = raise_for_errno(res)
+        res = self.bd_post('precreate', data=data).json()
         if res['return_type'] == 2:  # rapid upload
             return res['info']
         params = {'type': 'tmpfile', 'path': bd_path, 'uploadid': res['uploadid']}
         for i, x in enumerate(self.file_slice(f_path)):
             params['partseq'] = i
-            raise_for_errno(self.bd_post('upload', 'superfile2', api='PCS', params=params, files={'file': x}))
+            self.bd_post('upload', 'superfile2', api='PCS', params=params, files={'file': x})
         fields = ('path', 'size', 'isdir', 'block_list', 'rtype', 'local_ctime', 'local_mtime')
         data = {k: v for k, v in data.items() if k in fields}
         data['uploadid'] = params['uploadid']
-        res = self.bd_post('create', data=data)
-        return raise_for_errno(res)
+        return self.bd_post('create', data=data).json()
 
     def makedir(self, path):
         data = {'path': path, 'size': 0, 'isdir': "1", 'block_list': '[]', 'rtype': 0}
-        res = self.bd_post('create', data=data)
-        if res.json()['errno'] != -8:  # dir already exist
-            raise_for_errno(res)
+        self.bd_post('create', data=data, skip_errno=(-8,))  # -8: dir already exist
 
     def remove(self, *path):
         if len(path) == 0:
             return
         self.logger.info(f'remove: {path}')
-        raise_for_errno(self.bd_post('filemanager', params={'opera': 'delete', 'async': 0, 'onnest': 'fail'},
-                                     data={'filelist': json.dumps(path)}))
+        self.bd_post('filemanager', params={'opera': 'delete', 'async': 0, 'onnest': 'fail'},
+                     data={'filelist': json.dumps(path)})
 
     @log_error
     def upload(self, src=None, dst=None, overwrite=None, delete_extra=None):
@@ -230,11 +246,11 @@ class BdPan:
         dst = dst or self.config['pan_path']
         overwrite = overwrite or self.config['overwrite']
         delete_extra = delete_extra or self.config['delete_extra']
-        meta = mute_error(self.meta)(dst)
+        meta = self.meta(dst, True)
         if os.path.isfile(src):
             if meta is not None and meta['isdir'] == 1:
                 dst = os.path.join(dst, os.path.split(src)[1]).replace('\\', '/')
-                meta = mute_error(self.meta)(dst)
+                meta = self.meta(dst, True)
             self.upload_file(dst, src, overwrite, meta)
         elif os.path.isdir(src):
             if meta is not None and meta['isdir'] == 0:
@@ -268,11 +284,16 @@ class BdPan:
         self.upload(local_path, pan_path, overwrite, False)
 
 
-@mute_error
 def main():
-    pan = BdPan(get_config())
-    pan.login()
-    pan.act()
+    try:
+        pan = BdPan(get_config())
+        pan.login()
+        pan.act()
+        print('all done!')
+    except Exception as e:
+        raise e
+        print(f'fail due to {e}')
+        exit(-1)
 
 
 if __name__ == '__main__':
