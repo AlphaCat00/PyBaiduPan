@@ -25,7 +25,7 @@ class BdPan:
         self.config = config
         self.bd_get = partial(self._bd_request, 'get')
         self.bd_post = partial(self._bd_request, 'post')
-        self.act = self.__getattribute__(config['action'])
+        self.act = self.__getattribute__(config['action']) if 'action' in config else None
         self._get_logger()
         self.session = None
         self.bdstoken = None
@@ -52,7 +52,7 @@ class BdPan:
 
     @staticmethod
     def _get_bdstoken(html):
-        return re.search("'bdstoken', *'([0-9a-f]+)'", html).group(1)
+        return re.search("[',\"]bdstoken[',\"].*[',\"]([0-9a-f]+)[',\"]", html).group(1)
 
     @staticmethod
     def _compare_mtime(path, file_info, op):
@@ -137,10 +137,19 @@ class BdPan:
         os.utime(f_path, (file_info['local_mtime'], file_info['local_mtime']))
 
     def meta(self, path, ignore_file_not_exist=False):
-        skip_errno = (31066,) if ignore_file_not_exist else ()
-        res = self.bd_get('meta', api='PCS', params={'path': path}, skip_errno=skip_errno)
-        if res.status_code < 400:
-            return res.json()['list'][0]
+        if path == '/':
+            return {"server_filename": "", "local_mtime": 1520000000, "size": 0, "isdir": 1, "path": "/"}  # fake meta
+        params = {'dir': os.path.split(path)[0], 'key': os.path.split(path)[1]}
+        if not params['key']:
+            if ignore_file_not_exist:
+                return
+            raise BdApiError('file not found.')
+        metas = [x for x in self.bd_get('search', params=params).json()['list'] if x['path'] == path]
+        if len(metas) != 1:
+            if ignore_file_not_exist:
+                return
+            raise BdApiError('file not found.')
+        return metas[0]
 
     def _list(self, path, known_dir=False):
         if not known_dir:
@@ -291,7 +300,7 @@ def main():
         pan.act()
         print('all done!')
     except Exception as e:
-        raise e
+        # raise e
         print(f'fail due to {e}')
         exit(-1)
 
