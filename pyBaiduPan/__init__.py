@@ -1,4 +1,4 @@
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 from .bdpan import BdPan
 import pyBaiduPan.config
