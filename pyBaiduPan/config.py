@@ -17,9 +17,8 @@ parser.add_argument('-p', '--local-path', help='an alias of local_path. (default
 parser.add_argument('-b', '--pan-path', help='an alias of pan_path. (default: "/")', type=str)
 parser.add_argument('-c', '--conf', help='the path of config file.', default='config.json')
 parser.add_argument('-s', '--session', help='the path to save session information.', type=str)
-parser.add_argument('-u', '--username', help='baidu username, only needed once for authorization.', type=str)
-parser.add_argument('-P', '--password', help="baidu password, only needed once for authorization. \
-Warning: for security reason, don't save this in config file.", type=str)
+parser.add_argument('-H', '--host', help='the host login server bind to. (default: "127.0.0.1")', type=str)
+parser.add_argument('-P', '--port', help='the port for login server. (default: 25000)', type=int)
 parser.add_argument('-a', '--app-id', help='baidu app id. recommended IDs: 498065, 309847, 778750, 250528(official), \
 265486, 266719. Some of them can bypass 50M download limitation.', type=int)
 parser.add_argument('-o', '--overwrite', choices=['none', 'mtime', 'force'], default='none', help="none\tnever \
@@ -28,7 +27,7 @@ parser.add_argument('-l', '--log-file', help='specify where to save log.', type=
 parser.add_argument('-d', '--delete-extra', action='store_true', help='delete all extra files and directories in dst_\
 path. do NOT use this option unless you know exactly what you are doing. ')
 
-DEFAULT_CONFIG = {'session': "~/.BdPan/session.pkl", 'username': '', 'password': '', 'app_id': 778750,
+DEFAULT_CONFIG = {'session': "~/.BdPan/session.pkl", 'host': '127.0.0.1', 'port': 25000, 'app_id': 778750,
                   'local_path': '.', 'pan_path': '/', "overwrite": False, 'log_file': '', "delete_extra": False}
 
 

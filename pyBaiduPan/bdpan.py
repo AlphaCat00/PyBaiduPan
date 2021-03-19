@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pyBaiduPan.exceptions import *
-from DecryptLogin.login import Login
+from pyBaiduPan.login import baidu_pan_login
 from pyBaiduPan.config import get_config, DEFAULT_CONFIG
 import logging
 from itertools import count
@@ -50,8 +50,8 @@ class BdPan:
             num /= 1024.0
         return "%.1f%s" % (num, 'Y')
 
-    @staticmethod
-    def _get_bdstoken(html):
+    def _get_bdstoken(self):
+        html = self.session.get('https://pan.baidu.com/disk/home').text
         return re.search("[',\"]bdstoken[',\"].*[',\"]([0-9a-f]+)[',\"]", html).group(1)
 
     @staticmethod
@@ -96,17 +96,15 @@ class BdPan:
         return res
 
     @log_error
-    def login(self, username=None, password=None, s_file=None):
-        username, password = username or self.config['username'], password or self.config['password']
+    def login(self, host=None, port=None, s_file=None):
+        host, port = host or self.config['host'], port or self.config['port']
         s_file = s_file or os.path.expanduser(self.config['session'])
         self._load_session(s_file)
-        if self.session is None or mute_error(self.bd_get)('uinfo', 'nas') is None:
-            infos_return, self.session = Login().baidupan(username, password, 'pc')
-            if infos_return['errInfo']['no'] != '0':
-                raise RuntimeError(infos_return)
+        self.bdstoken = mute_error(self._get_bdstoken)()
+        if self.bdstoken is None:
+            self.session = baidu_pan_login(host, port)
+            self.bdstoken = self._get_bdstoken()
         self._save_session(s_file)
-        res = self.session.get('https://pan.baidu.com/disk/home')
-        self.bdstoken = self._get_bdstoken(res.text)
 
     @log_error
     def logout(self, s_file=None):
@@ -298,10 +296,8 @@ def main():
         pan = BdPan(get_config())
         pan.login()
         pan.act()
-        print('all done!')
     except Exception as e:
-        # raise e
-        print(f'fail due to {e}')
+        raise e
         exit(-1)
 
 

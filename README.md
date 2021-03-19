@@ -4,7 +4,7 @@ A python client for Baidu Pan to download, upload, and sync files.  Mainly desig
 ## Feature
 + recurse download/upload
 + bypass 50M download limitation using app_id
-+ resume downloading form the breakpoint
++ resume downloading from the breakpoint
 + rapid upload
 + directory sync
 + retry on failures
@@ -30,10 +30,15 @@ python3 (>=3.6)
 
 **local_path** local path, which can be file or directory.
 ### First Time Use
-Need to specify username and password for authorization.
+Need to go to http://{host}:{port} (default: http://127.0.0.1:25000) to login your baidu account. 
 
-     BdPan -u your_username -P your_password
-captcha or email/phone verification may be required.
+    BdPan
+     
+Set host and port using -H and -P option.
+    
+    BdPan -H 0.0.0.0 -P 8080
+
+**If your account require a security verification, please do it on pan.baidu.com and try again.** This is a known issue, and will be fix later. 
 ### List
 list files and directories in the path.
 
@@ -105,8 +110,9 @@ delete extra option can use with upload/download.
 *warning: this option may lead to **permanent** file loss. use it with caution.*
  
 ### Full Usage 
-    usage: bdpan.py [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-u USERNAME] [-P PASSWORD] [-a APP_ID] [-o {none,mtime,force}] [-l LOG_FILE] [-d]
-                    [action] [pan_path] [local_path]
+    usage: BdPan.exe [-h] [-p LOCAL_PATH] [-b PAN_PATH] [-c CONF] [-s SESSION] [-H HOST] [-P PORT] [-a APP_ID]
+                     [-o {none,mtime,force}] [-l LOG_FILE] [-d]
+                     [action] [pan_path] [local_path]
     
      a Python client for Baidu Pan.
     
@@ -129,10 +135,8 @@ delete extra option can use with upload/download.
       -c CONF, --conf CONF  the path of config file.
       -s SESSION, --session SESSION
                             the path to save session information.
-      -u USERNAME, --username USERNAME
-                            baidu username, only needed once for authorization.
-      -P PASSWORD, --password PASSWORD
-                            baidu password, only needed once for authorization. Warning: for security reason, don't save this in config file.
+      -H HOST, --host HOST  the host login server bind to. (default: "127.0.0.1")
+      -P PORT, --port PORT  the port for login server. (default: 25000)
       -a APP_ID, --app-id APP_ID
                             baidu app id. recommended IDs: 498065, 309847, 778750, 250528(official), 265486, 266719. Some of them can bypass 50M download limitation.
       -o {none,mtime,force}, --overwrite {none,mtime,force}
@@ -158,7 +162,7 @@ pan.upload('./backup', '/test', overwrite='mtime', delete_extra=True)  # sync up
 + ~~upload~~
 + ~~sync~~
 + ~~better exception handling~~
-+ support external downloader (aria2)
++ multi-thread download
 + ~~robust request~~
 + proxy
 + tests
